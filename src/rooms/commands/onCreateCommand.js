@@ -3,7 +3,7 @@ const command = require("@colyseus/command");
 
 module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
   execute({ maxClients }) {
-    this.room.maxClients = maxClients <= 8 && maxClients >= 2 ? maxClients : 8;
+    this.room.maxClients = maxClients + 1;
     let teams = [];
     this.state.isGameStarted = false;
 
@@ -42,15 +42,36 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
     });
     this.room.onMessage("give-hints", (client, data) => {
       this.state.hints = data; //data is hint given by host
-      console.log("Hints are", this.state.hints);
+      let hints = data;
+      this.room.broadcast("set-hints", {
+        hints: hints,
+      });
+      // console.log("Hints are", this.state.hints);
       this.state.hasGivenHints = true;
+    });
+
+    this.room.onMessage("set-player-score", (client, data) => {
+      this.state.players[client.id].score = data;
+    });
+    //set for each, min or max of the score of team players
+    this.room.onMessage("set-team-score", (client, data) => {
+      this.room.state.players.forEach((element) => {
+        console.log(element.team);
+        this.room.state.players.forEach((ele) => {
+          if (element.team === ele.team) {
+            // if(oddRoundNo)
+            element.score = Math.min(element.score, ele.score);
+            ele.score = Math.min(element.score, ele.score);
+          }
+        });
+      });
     });
     this.room.onMessage("send-message", (client, data) => {
       console.log("Message ", data);
-      console.log("Sender ", this.state.players[client.id].username);
+      // console.log("Sender ", this.state.players[client.id].score);
       this.state.messages.push(
         `${this.state.players[client.id].username} : ${data}`
-      ); //data is hint given by host
+      );
     });
 
     this.room.onMessage("kick", (client, playerId) => {
@@ -70,6 +91,7 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
       if (client.id === this.state.host) {
         this.state.isGameStarted = data.value;
         console.log("forming teams");
+        if (this.state.isGameStarted) teams = [];
         for (let i = 1; i <= this.state.teamLimit; i++) {
           teams.push([]);
         }
@@ -89,11 +111,42 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
     this.room.onMessage("join-team", (client, msg) => {
       console.log("Join team ", msg);
       this.state.players[client.id].team = "Team " + msg;
-      teams[msg].push(this.state.players[client.id].username);
-      this.room.broadcast("join-teams", {
-        teams: teams,
-        maxRusher: this.state.rushersPerTeamLimit,
+      if (teams[msg].length < this.room.state.rushersPerTeamLimit) {
+        teams[msg].push(this.state.players[client.id].username);
+        this.room.broadcast("join-teams", {
+          teams: teams,
+          maxRusher: this.state.rushersPerTeamLimit,
+        });
+        client.send("joined-team", {
+          teams: msg,
+          client: client,
+        });
+      }
+      if (teams[msg].length === this.room.state.rushersPerTeamLimit) {
+        console.log("Team ", msg, " full");
+        this.room.broadcast("cant-join-teams", {
+          teams: teams,
+          msg: msg,
+        });
+      }
+      console.log(teams);
+      let everyoneJoined = true;
+      this.room.state.players.forEach((element) => {
+        // console.log("Player....",element);
+        if (
+          element !== this.room.state.players[this.room.state.host] &&
+          !element.team
+        ) {
+          everyoneJoined = false;
+          console.log(element.username, "not joined a team");
+          console.log("Host...", this.room.state.host, client.sessionId);
+        }
       });
+      if (everyoneJoined) {
+        this.room.broadcast("everyone-joined-team", {
+          msg: true,
+        });
+      }
     });
     this.room.onMessage("pause", () => {
       this.room.countdownInterval.pause();

@@ -4,6 +4,9 @@ module.exports.RemovePlayer = class RemovePlayer extends command.Command {
   execute({ sessionId }) {
     
     this.state.players.delete(sessionId);
+    this.room.broadcast("someone-left", {
+      val: true,
+    });
     
     if (this.state.players.size === 1) {
       // only one player

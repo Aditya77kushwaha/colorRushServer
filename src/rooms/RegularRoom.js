@@ -1,9 +1,9 @@
-const colyseus = require('colyseus');
-const command = require('@colyseus/command');
-const { RegularRoomState } = require('./schema/RegularRoomState');
-const { OnJoinCommand } = require('./commands/onJoinCommand');
-const { OnCreateCommand } = require('./commands/onCreateCommand');
-const { RemovePlayer } = require('./commands/removePlayers');
+const colyseus = require("colyseus");
+const command = require("@colyseus/command");
+const { RegularRoomState } = require("./schema/RegularRoomState");
+const { OnJoinCommand } = require("./commands/onJoinCommand");
+const { OnCreateCommand } = require("./commands/onCreateCommand");
+const { RemovePlayer } = require("./commands/removePlayers");
 
 module.exports.RegularRoom = class extends colyseus.Room {
   onCreate(options) {
@@ -39,10 +39,13 @@ module.exports.RegularRoom = class extends colyseus.Room {
         this.state.players.get(client.sessionId).connected = true;
         if (this.state.players.size === this.maxClients) {
           this.state.isGameStarted = true;
+          this.room.broadcast("everyone-joined", {
+            val: true,
+          });
           this.countdownInterval.resume();
         }
       } catch (error) {
-        console.log(client.sessionId, 'left!');
+        console.log(client.sessionId, "left!");
         this.dispatcher.dispatch(new RemovePlayer(), {
           sessionId: client.sessionId,
         });
@@ -52,6 +55,6 @@ module.exports.RegularRoom = class extends colyseus.Room {
 
   onDispose() {
     this.dispatcher.stop();
-    console.log('room', this.roomId, 'disposing...');
+    console.log("room", this.roomId, "disposing...");
   }
 };

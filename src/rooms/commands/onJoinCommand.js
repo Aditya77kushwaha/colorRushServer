@@ -1,6 +1,6 @@
-const command = require('@colyseus/command');
-const { generateName } = require('../../utils/room_creation');
-const Player = require('../schema/Player');
+const command = require("@colyseus/command");
+const { generateName } = require("../../utils/room_creation");
+const Player = require("../schema/Player");
 
 module.exports.OnJoinCommand = class OnJoinCommand extends command.Command {
   execute({ sessionId, username }) {
@@ -10,9 +10,12 @@ module.exports.OnJoinCommand = class OnJoinCommand extends command.Command {
     this.state.players.set(sessionId, player);
 
     if (this.state.players.size === this.room.maxClients) {
-      console.log('max clients reached', this.room.roomId);
+      console.log("max clients reached", this.room.roomId);
+      this.room.broadcast("everyone-joined", {
+        val: true,
+      });
     }
-    if(this.state.isGameStarted){
+    if (this.state.isGameStarted) {
       this.room.countdownInterval.resume();
     }
   }
