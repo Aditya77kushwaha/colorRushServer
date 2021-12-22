@@ -39,9 +39,9 @@ module.exports.RegularRoom = class extends colyseus.Room {
         this.state.players.get(client.sessionId).connected = true;
         if (this.state.players.size === this.maxClients) {
           this.state.isGameStarted = true;
-          this.room.broadcast("everyone-joined", {
-            val: true,
-          });
+          // this.room.broadcast("everyone-joined", {
+          //   val: true,
+          // });
           this.countdownInterval.resume();
         }
       } catch (error) {
