@@ -18,9 +18,10 @@ class RegularRoomState extends Schema {
     this.rushersPerTeamLimit = 1;
     this.hasGivenHints = false;
     this.hasTeamsFormed = false;
-    this.rgb = new ArraySchema();
+    this.color = new ArraySchema(80);
     this.hints = new ArraySchema();
     this.messages = new ArraySchema();
+    this.guessed = new ArraySchema();
     this.teams = new ArraySchema();
     this.players = new MapSchema();
   }
@@ -36,8 +37,11 @@ defineTypes(RegularRoomState, {
   teamLimit: "number",
   rushersPerTeamLimit: "number",
   host: "string",
-  rgb: ["number"],
+  rushers: ["string"],
+  clueGivers: ["string"],
+  color: ["number"],
   hints: ["string"],
+  guessed: ["string"],
   messages: ["string"],
   teams: [["string"]],
 });

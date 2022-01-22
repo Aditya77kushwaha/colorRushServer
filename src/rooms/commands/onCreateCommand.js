@@ -17,10 +17,10 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
       }
     }, 1000);
     this.room.countdownInterval.pause();
-    this.room.onMessage("round-limit", (client, data) => {
-      console.log("Setting round limit", data);
-      this.state.roundLimit = data;
-    });
+    // this.room.onMessage("round-limit", (client, data) => {
+    //   console.log("Setting round limit", data);
+    //   this.state.roundLimit = data;
+    // });
     this.room.onMessage("time-limit", (client, data) => {
       console.log("Setting time limit", data);
       this.state.timeLimit = data;
@@ -31,7 +31,7 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
     });
     this.room.onMessage("rusherPerTeam-limit", (client, data) => {
       console.log("Setting rusher per team limit", data);
-      this.state.rushersPerTeamLimit = data;
+      this.state.rushersPerTeamLimit = data + 1;
     });
     this.room.onMessage("host-choose-color", (client, data) => {
       this.state.rgb = data; //data is array of rgb values of the color chosen by host
@@ -40,18 +40,45 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
       this.state.players[client.id].rgb = data; //data is array of rgb values of the color guessed by player
       // calculate score for this player
     });
+    this.room.onMessage("new-hint", (client, hint) => {
+      // this.state.players[client.id].rgb = data;
+      // if (
+      //   this.state.hints.findIndex(
+      //     (x) => x.trim().toUpperCase() === hint.trim().toUpperCase()
+      //   ) === -1 &&
+      //   hint.trim().toUpperCase().split(" ").length <= 3
+      // ) {
+      //   this.state.hints.push(hint.trim().toUpperCase());
+      //   // setHints((prevVal) => [...prevVal, hint.trim().toUpperCase()]);
+      // }
+      this.state.hints.push(hint?.trim().toUpperCase());
+      this.room.broadcast("set-hints", {
+        hints: this.state.hints,
+      });
+    });
+
     this.room.onMessage("give-hints", (client, data) => {
       this.state.hints = data; //data is hint given by host
       let hints = data;
       this.room.broadcast("set-hints", {
-        hints: hints,
+        hints: this.state.hints,
+        submit: true,
       });
       // console.log("Hints are", this.state.hints);
       this.state.hasGivenHints = true;
     });
 
     this.room.onMessage("set-player-score", (client, data) => {
-      this.state.players[client.id].score = data;
+      this.state.players[client.id].score += data;
+      this.room.broadcast("set-player-score", {
+        score: this.state.players[client.id].score,
+        sessionId: client.sessionId,
+      });
+      // console.log(
+      //   "Score of ",
+      //   this.state.players[client.id].username,
+      //   this.state.players[client.id].score
+      // );
     });
     //set for each, min or max of the score of team players
     this.room.onMessage("set-team-score", (client, data) => {
@@ -82,11 +109,6 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
         player.leave(4000);
       }
     });
-    this.room.onMessage("end", (client) => {
-      if (client.id === this.state.host) {
-        console.log("Ending Game...");
-      }
-    });
     this.room.onMessage("start", (client, data) => {
       if (client.id === this.state.host) {
         this.state.isGameStarted = data.value;
@@ -104,14 +126,20 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
     });
     this.room.onMessage("teams-formed", (client, msg) => {
       if (client.id === this.state.host) {
-        console.log("Ending Game...");
-        this.state.hasTeamsFormed = msg;
+        this.state.hasTeamsFormed = true;
+        this.state.rushers = msg.rushers;
+        this.state.clueGivers = msg.clueGivers;
+        this.room.broadcast("form-clueGivers", {
+          clueGivers: msg.clueGivers,
+        });
+        console.log("Rushers are", msg.rushers);
+        console.log("clue givers are", msg.clueGivers);
       }
     });
     this.room.onMessage("join-team", (client, msg) => {
       console.log("Join team ", msg);
       this.state.players[client.id].team = "Team " + msg;
-      if (teams[msg].length < this.room.state.rushersPerTeamLimit) {
+      if (teams[msg].length < this.room.state.rushersPerTeamLimit + 1) {
         teams[msg].push(this.state.players[client.id].username);
         this.room.broadcast("join-teams", {
           teams: teams,
@@ -146,6 +174,54 @@ module.exports.OnCreateCommand = class OnCreateCommand extends command.Command {
         this.room.broadcast("everyone-joined-team", {
           msg: true,
         });
+      }
+    });
+
+    this.room.onMessage("host-chosen-color", (client, color) => {
+      this.state.color = color;
+      this.room.broadcast("set-host-chosen-color", {
+        color,
+      });
+      console.log(color);
+    });
+    this.room.onMessage("rusher-guessed", (client, guesser) => {
+      console.log(guesser);
+      this.state.guessed.push("guesser", guesser);
+      this.room.broadcast("set-rusher-guessed", {
+        guesser,
+      });
+    });
+    this.room.onMessage("game-end", (client) => {
+      if (client.id === this.state.host) {
+        console.log("Ending Game...");
+        const winners = [];
+        let winner = null;
+        this.state.players.forEach((player, id) => {
+          // console.log(player.balance, this.assetsValue(player.assets));
+          const totalValue = player.score;
+          if (!winner) {
+            winner = { id, data: player, totalValue };
+            return;
+          }
+          if (totalValue >= winner.totalValue) {
+            winner.id = id;
+            winner.data = player;
+            winner.totalValue = totalValue;
+          }
+        });
+        winners.push(winner);
+        console.log(winner);
+        this.room.broadcast("set-game-end", { winners });
+        // this.room.disconnect();
+      }
+    });
+    this.room.onMessage("play-again", (client) => {
+      if (client.id === this.state.host) {
+        this.state.hasGivenHints = false;
+        while (this.state.hints.length !== 0) this.state.hints.pop();
+        while (this.state.guessed.length !== 0) this.state.guessed.pop();
+        // this.state.guessed = [];
+        this.room.broadcast("set-play-again");
       }
     });
     this.room.onMessage("pause", () => {
